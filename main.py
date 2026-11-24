@@ -29,6 +29,7 @@ Deterministic: identical output on every run. No network, no secrets,
 no input files, no randomness: the excuse is a literal in this file.
 """
 
+import hashlib
 from pathlib import Path
 
 EXCUSE = (
@@ -37,6 +38,14 @@ EXCUSE = (
 )
 
 MAX_CHARS = 200
+
+# sha256 of the exact bytes written to entry.txt (75 bytes, no trailing
+# newline). main() verifies the read-back bytes against this digest and
+# fails loudly on any mismatch, so a silent write corruption can never
+# ship as the entry.
+EXPECTED_SHA256 = (
+    "08aa938f019aad1b30675957cf33249e1118e26fc40deea8d55750265c1ea823"
+)
 
 BANNED_PATTERNS = (
     # The entry must be the excuse itself: no addressing the judge,
@@ -72,6 +81,13 @@ def main() -> None:
     out = Path("/output/entry.txt")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(EXCUSE, encoding="utf-8")
+    # Write-back verification: read the file back and check its digest.
+    digest = hashlib.sha256(out.read_bytes()).hexdigest()
+    if digest != EXPECTED_SHA256:
+        raise OSError(
+            f"write-back verification failed: entry.txt sha256 "
+            f"{digest} != expected {EXPECTED_SHA256}"
+        )
     print(EXCUSE)
 
 
